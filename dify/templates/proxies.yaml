@@ -1,7 +1,7 @@
 {{- $root := . }}
 {{- $name := include "dify.name" . }}
 {{- $proxies := list "ssrf-proxy" }}
-{{- if .Values.agent.enabled }}
+{{- if and .Values.agent.enabled (eq .Values.agent.runtime "local") }}
 {{- $proxies = append $proxies "agent-proxy" }}
 {{- end }}
 {{- range $proxy := $proxies }}

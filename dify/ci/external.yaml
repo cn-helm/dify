@@ -3,6 +3,7 @@ security:
 database:
   mode: external
   host: postgres.example.internal
+  username: postgres
 redis:
   mode: external
   host: redis.example.internal

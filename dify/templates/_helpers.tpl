@@ -5,14 +5,25 @@
 {{- $config := dict "configMapRef" (dict "name" (printf "%s-config" (include "dify.name" .))) -}}
 {{- $secret := dict "secretRef" (dict "name" (include "dify.secret" .)) -}}
 {{- $sources := concat .Values.extraEnvFrom (list $config $secret) -}}
+{{- if .Values.vectorStore.existingSecret -}}
+{{- $sources = prepend $sources (dict "secretRef" (dict "name" .Values.vectorStore.existingSecret)) -}}
+{{- end -}}
 {{- dict "envFrom" $sources | toYaml -}}
 {{- end -}}
 {{- define "dify.broker" -}}
 {{- $url := printf "redis://:$(REDIS_PASSWORD)@%s:%v/1" (ternary (printf "%s-redis" (include "dify.name" .)) .Values.redis.host (eq .Values.redis.mode "internal")) .Values.redis.port -}}
-{{- list (dict "name" "CELERY_BROKER_URL" "value" $url) | toYaml -}}
+{{- $broker := list (dict "name" "CELERY_BROKER_URL" "value" $url) -}}
+{{- $vector := include "dify.vectorCredentials" . | fromYamlArray -}}
+{{- concat $broker $vector | toYaml -}}
 {{- end -}}
 {{- define "dify.claim" -}}
 {{- default (printf "%s-storage" (include "dify.name" .)) .Values.persistence.existingClaim -}}
+{{- end -}}
+{{- define "dify.dbPort" -}}
+{{- default (ternary 3306 5432 (eq .Values.database.type "mysql")) .Values.database.port -}}
+{{- end -}}
+{{- define "dify.dbUser" -}}
+{{- default (ternary "root" "postgres" (eq .Values.database.type "mysql")) .Values.database.username -}}
 {{- end -}}
 {{- define "dify.volumeClaim" -}}
 accessModes: [{{ .Values.persistence.accessMode | quote }}]

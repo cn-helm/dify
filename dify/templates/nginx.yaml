@@ -27,6 +27,11 @@ data:
       location ~ ^/(console/api|api|v1|openapi|files|mcp|triggers)(/|$) {
         proxy_pass http://{{ $name }}-api:5001;
       }
+      {{- if and .Values.agent.enabled (ne .Values.agent.runtime "local") }}
+      location /agent-stub/ {
+        proxy_pass http://{{ $name }}-agent:5050;
+      }
+      {{- end }}
       {{- if .Values.collaboration.enabled }}
       location /socket.io/ {
         proxy_pass http://{{ $name }}-websocket:5006;
@@ -80,7 +85,7 @@ spec:
         {{- include "dify.labels" . | nindent 8 }}
         app.kubernetes.io/component: nginx
       annotations:
-        checksum/nginx: {{ printf "%s-%v" (toJson .Values.exposure) .Values.collaboration.enabled | sha256sum }}
+        checksum/nginx: {{ printf "%s-%v-%s" (toJson .Values.exposure) .Values.collaboration.enabled (toJson .Values.agent) | sha256sum }}
     spec:
       {{- include "dify.pod" . | nindent 6 }}
       containers:

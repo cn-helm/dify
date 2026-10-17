@@ -9,12 +9,51 @@
 {{- end -}}
 {{- if eq .Values.database.mode "external" -}}
 {{- $_ := required "External database requires database.host" .Values.database.host -}}
+{{- $_ := required "External database requires database.username" .Values.database.username -}}
+{{- end -}}
+{{- if eq .Values.database.mode "internal" -}}
+{{- if ne (include "dify.dbPort" .) (ternary "3306" "5432" (eq .Values.database.type "mysql")) -}}{{- fail "Internal database port is fixed by the selected database type" -}}{{- end -}}
+{{- if and (eq .Values.database.type "mysql") (ne (include "dify.dbUser" .) "root") -}}{{- fail "Internal MySQL currently requires database.username=root or empty" -}}{{- end -}}
+{{- end -}}
+{{- if .Values.unstructured.enabled -}}
+{{- $_ := required "Unstructured requires unstructured.endpoint" .Values.unstructured.endpoint -}}
+{{- end -}}
+{{- if and .Values.agent.enabled (ne .Values.agent.runtime "local") -}}
+{{- $_ := required "External Agent runtimes require agent.existingSecret" .Values.agent.existingSecret -}}
+{{- $_ := required "External Agent runtimes require agent.config.DIFY_AGENT_STUB_API_BASE_URL" .Values.agent.config.DIFY_AGENT_STUB_API_BASE_URL -}}
+{{- $_ := required "External Agent runtimes require agent.config.DIFY_AGENT_SANDBOX_FILES_BASE_URL" .Values.agent.config.DIFY_AGENT_SANDBOX_FILES_BASE_URL -}}
+{{- end -}}
+{{- range $key, $value := .Values.agent.config -}}
+{{- if or (regexMatch "PASSWORD|API_KEY|TOKEN|SECRET" $key) (not (regexMatch "^DIFY_AGENT_(E2B_|OPENSHELL_|STUB_API_BASE_URL$|SANDBOX_FILES_BASE_URL$)" $key)) -}}
+{{- fail (printf "Invalid or sensitive agent.config.%s; use agent.existingSecret" $key) -}}
+{{- end -}}
 {{- end -}}
 {{- if eq .Values.redis.mode "external" -}}
 {{- $_ := required "External Redis requires redis.host" .Values.redis.host -}}
 {{- end -}}
 {{- if eq .Values.vectorStore.mode "external" -}}
+{{- if eq .Values.vectorStore.type "weaviate" -}}
 {{- $_ := required "External vector store requires vectorStore.endpoint" .Values.vectorStore.endpoint -}}
+{{- $_ := required "External Weaviate requires vectorStore.grpcEndpoint" .Values.vectorStore.grpcEndpoint -}}
+{{- end -}}
+{{- end -}}
+{{- $catalog := .Files.Get "files/vector-backends.yaml" | fromYaml -}}
+{{- $backend := get $catalog .Values.vectorStore.type -}}
+{{- if not $backend -}}{{- fail "Unknown vectorStore.type" -}}{{- end -}}
+{{- if eq .Values.vectorStore.mode "internal" -}}
+{{- if not $backend.bundled -}}{{- fail (printf "%s currently requires vectorStore.mode=external; bundled deployment is not implemented" .Values.vectorStore.type) -}}{{- end -}}
+{{- else -}}
+{{- range $key := $backend.required -}}
+{{- $_ := required (printf "External %s requires vectorStore.config.%s" $.Values.vectorStore.type $key) (get $.Values.vectorStore.config $key | toString) -}}
+{{- end -}}
+{{- end -}}
+{{- range $key, $value := .Values.vectorStore.config -}}
+{{- if or (regexMatch "PASSWORD|API_KEY|TOKEN|CREDENTIAL" $key) (not (regexMatch "^(WEAVIATE_|QDRANT_|PGVECTOR_|PGVECTO_RS_|CHROMA_|ELASTICSEARCH_|OPENSEARCH_|MILVUS_|OCEANBASE_|COUCHBASE_|VASTBASE_|IRIS_|ORACLE_|OPENGAUSS_|MYSCALE_|MATRIXONE_)" $key)) -}}
+{{- fail (printf "Invalid or sensitive vectorStore.config.%s; use vectorStore.existingSecret for credentials" $key) -}}
+{{- end -}}
+{{- end -}}
+{{- if and (or (eq .Values.database.mode "external") (eq .Values.redis.mode "external") (eq .Values.vectorStore.mode "external")) (not .Values.security.existingSecret) -}}
+{{- fail "External services require security.existingSecret with matching credentials" -}}
 {{- end -}}
 {{- range $key, $value := .Values.extraEnv -}}
 {{- if or (hasPrefix "DB_" $key) (hasPrefix "REDIS_" $key) (hasPrefix "PLUGIN_" $key) (hasPrefix "DIFY_AGENT_" $key) (hasPrefix "AGENT_BACKEND_" $key) (has $key (list "SECRET_KEY" "MODE" "MIGRATION_ENABLED" "DIFY_PORT" "CELERY_BROKER_URL" "INNER_API_KEY_FOR_PLUGIN" "CODE_EXECUTION_API_KEY" "VECTOR_STORE" "WEAVIATE_API_KEY" "WEAVIATE_ENDPOINT" "WEAVIATE_GRPC_ENDPOINT")) -}}

@@ -1,7 +1,7 @@
 {{- if .Values.networkPolicy.enabled }}
 {{- $root := . }}
 {{- $sandboxes := list "sandbox" }}
-{{- if .Values.agent.enabled }}
+{{- if and .Values.agent.enabled (eq .Values.agent.runtime "local") }}
 {{- $sandboxes = append $sandboxes "local-sandbox" }}
 {{- end }}
 {{- range $sandbox := $sandboxes }}

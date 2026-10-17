@@ -48,24 +48,29 @@ questions:
     description: Optional. Must match the selected access mode. Other components still create their own volumes.
     type: pvc
     group: Storage
+  - variable: database.type
+    label: Database Engine
+    type: enum
+    options: [postgresql, mysql]
+    group: Database
   - variable: database.mode
-    label: PostgreSQL Deployment
+    label: Database Deployment
     type: enum
     options: [internal, external]
     group: Database
     show_subquestion_if: external
     subquestions:
       - variable: database.host
-        label: PostgreSQL Host
+        label: Database Host
         type: string
         required: true
       - variable: database.port
-        label: PostgreSQL Port
+        label: Database Port (0 for Default)
         type: int
-        min: 1
+        min: 0
         max: 65535
       - variable: database.username
-        label: PostgreSQL User
+        label: Database User
         type: string
         required: true
   - variable: database.name
@@ -92,8 +97,34 @@ questions:
         type: int
         min: 1
         max: 65535
+  - variable: vectorStore.type
+    label: Vector Backend
+    type: enum
+    options:
+      [
+        weaviate,
+        qdrant,
+        pgvector,
+        pgvecto-rs,
+        chroma,
+        elasticsearch,
+        opensearch,
+        elasticsearch-ja,
+        milvus,
+        oceanbase,
+        seekdb,
+        couchbase,
+        vastbase,
+        iris,
+        oracle,
+        opengauss,
+        myscale,
+        matrixone,
+      ]
+    description: Some backends require external mode. External non-Weaviate endpoints are configured through vectorStore.config in Values YAML.
+    group: Vector Store
   - variable: vectorStore.mode
-    label: Weaviate Deployment
+    label: Vector Backend Deployment
     type: enum
     options: [internal, external]
     group: Vector Store
@@ -102,11 +133,16 @@ questions:
       - variable: vectorStore.endpoint
         label: Weaviate HTTP Endpoint
         type: string
-        required: true
+        show_if: vectorStore.type=weaviate
       - variable: vectorStore.grpcEndpoint
         label: Weaviate gRPC Endpoint
         type: string
-        required: true
+        show_if: vectorStore.type=weaviate
+  - variable: vectorStore.existingSecret
+    label: Vector Backend Credentials Secret
+    description: Use native Dify environment variable names as Secret keys.
+    type: secret
+    group: Vector Store
   - variable: agent.enabled
     label: Enable Agent and Local Sandbox
     type: boolean
@@ -115,6 +151,28 @@ questions:
     label: Enable Workflow Collaboration
     type: boolean
     group: Features
+  - variable: agent.runtime
+    label: Agent Runtime
+    description: E2B and OpenShell require a credentials Secret and reachable callback URLs in Values YAML.
+    type: enum
+    options: [local, e2b, openshell]
+    show_if: agent.enabled=true
+    group: Agent
+  - variable: agent.existingSecret
+    label: External Agent Credentials Secret
+    type: secret
+    show_if: agent.enabled=true
+    group: Agent
+  - variable: unstructured.enabled
+    label: Enable External Unstructured
+    type: boolean
+    group: Features
+    show_subquestion_if: "true"
+    subquestions:
+      - variable: unstructured.endpoint
+        label: Unstructured API Endpoint
+        type: string
+        required: true
   - variable: security.existingSecret
     label: Existing Credentials Secret
     description: Required for external dependencies and GitOps. See README for exact key names. Password fields are not encryption.

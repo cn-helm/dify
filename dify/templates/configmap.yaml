@@ -16,10 +16,10 @@
   SERVER_WORKER_CONNECTIONS: "10"
   CELERY_WORKER_AMOUNT: "4"
   GUNICORN_TIMEOUT: "360"
-  DB_TYPE: postgresql
-  DB_HOST: {{ ternary (printf "%s-postgres" $name) .Values.database.host (eq .Values.database.mode "internal") | quote }}
-  DB_PORT: {{ .Values.database.port | quote }}
-  DB_USERNAME: {{ .Values.database.username | quote }}
+  DB_TYPE: {{ .Values.database.type }}
+  DB_HOST: {{ ternary (printf "%s-%s" $name (ternary "mysql" "postgres" (eq .Values.database.type "mysql"))) .Values.database.host (eq .Values.database.mode "internal") | quote }}
+  DB_PORT: {{ include "dify.dbPort" . | quote }}
+  DB_USERNAME: {{ include "dify.dbUser" . | quote }}
   DB_DATABASE: {{ .Values.database.name | quote }}
   REDIS_HOST: {{ ternary (printf "%s-redis" $name) .Values.redis.host (eq .Values.redis.mode "internal") | quote }}
   REDIS_PORT: {{ .Values.redis.port | quote }}
@@ -28,7 +28,7 @@
   STORAGE_TYPE: opendal
   OPENDAL_SCHEME: fs
   OPENDAL_FS_ROOT: storage
-  VECTOR_STORE: weaviate
+  VECTOR_STORE: {{ .Values.vectorStore.type }}
   WEAVIATE_ENDPOINT: {{ default (printf "http://%s-weaviate:8080" $name) .Values.vectorStore.endpoint | quote }}
   WEAVIATE_GRPC_ENDPOINT: {{ default (printf "grpc://%s-weaviate:50051" $name) .Values.vectorStore.grpcEndpoint | quote }}
   CODE_EXECUTION_ENDPOINT: http://{{ $name }}-sandbox:8194
@@ -52,8 +52,14 @@
   NEXT_PUBLIC_SOCKET_URL: {{ include "dify.url" . | replace "https://" "wss://" | replace "http://" "ws://" | quote }}
   RESPECT_XFORWARD_HEADERS_ENABLED: "true"
   AGENT_BACKEND_BASE_URL: http://{{ $name }}-agent:5050
+  {{- if .Values.unstructured.enabled }}
+  ETL_TYPE: Unstructured
+  UNSTRUCTURED_API_URL: {{ .Values.unstructured.endpoint | quote }}
+  {{- end }}
 {{- end -}}
 {{- $data := include "dify.configData" . | fromYaml }}
+{{- $vector := include "dify.vectorConfig" . | fromYaml }}
+{{- $data = mergeOverwrite $data $vector }}
 {{- range $key, $value := .Values.extraEnv }}
 {{- $_ := set $data $key ($value | toString) }}
 {{- end }}

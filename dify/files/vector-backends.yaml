@@ -1,0 +1,54 @@
+weaviate:
+  bundled: true
+  required: []
+qdrant:
+  bundled: true
+  required: [QDRANT_URL]
+pgvector:
+  bundled: true
+  required: [PGVECTOR_HOST, PGVECTOR_PORT, PGVECTOR_USER, PGVECTOR_DATABASE]
+pgvecto-rs:
+  bundled: true
+  required: [PGVECTO_RS_HOST, PGVECTO_RS_PORT, PGVECTO_RS_USER, PGVECTO_RS_DATABASE]
+chroma:
+  bundled: true
+  required: [CHROMA_HOST, CHROMA_PORT, CHROMA_TENANT, CHROMA_DATABASE]
+elasticsearch:
+  bundled: true
+  required: [ELASTICSEARCH_HOST, ELASTICSEARCH_PORT, ELASTICSEARCH_USERNAME]
+opensearch:
+  bundled: true
+  required: [OPENSEARCH_HOST, OPENSEARCH_PORT, OPENSEARCH_USER]
+elasticsearch-ja:
+  bundled: false
+  required: [ELASTICSEARCH_HOST, ELASTICSEARCH_PORT, ELASTICSEARCH_USERNAME]
+milvus:
+  bundled: false
+  required: [MILVUS_URI]
+oceanbase:
+  bundled: false
+  required: [OCEANBASE_VECTOR_HOST, OCEANBASE_VECTOR_PORT, OCEANBASE_VECTOR_USER, OCEANBASE_VECTOR_DATABASE]
+seekdb:
+  bundled: false
+  required: [OCEANBASE_VECTOR_HOST, OCEANBASE_VECTOR_PORT, OCEANBASE_VECTOR_USER, OCEANBASE_VECTOR_DATABASE]
+couchbase:
+  bundled: false
+  required: [COUCHBASE_CONNECTION_STRING, COUCHBASE_USER, COUCHBASE_BUCKET_NAME, COUCHBASE_SCOPE_NAME]
+vastbase:
+  bundled: false
+  required: [VASTBASE_HOST, VASTBASE_PORT, VASTBASE_USER, VASTBASE_DATABASE]
+iris:
+  bundled: false
+  required: [IRIS_HOST, IRIS_SUPER_SERVER_PORT, IRIS_USER, IRIS_SCHEMA, IRIS_DATABASE]
+oracle:
+  bundled: false
+  required: [ORACLE_USER, ORACLE_DSN]
+opengauss:
+  bundled: false
+  required: [OPENGAUSS_HOST, OPENGAUSS_PORT, OPENGAUSS_USER, OPENGAUSS_DATABASE]
+myscale:
+  bundled: false
+  required: [MYSCALE_HOST, MYSCALE_PORT, MYSCALE_USER, MYSCALE_DATABASE]
+matrixone:
+  bundled: false
+  required: [MATRIXONE_HOST, MATRIXONE_PORT, MATRIXONE_USER, MATRIXONE_DATABASE]

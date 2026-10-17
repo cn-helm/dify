@@ -8,8 +8,15 @@ images:
   localSandbox: langgenius/dify-agent-local-sandbox:1.17.1
   sandbox: langgenius/dify-sandbox:0.2.15
   postgres: postgres:15-alpine
+  mysql: mysql:8.0
   redis: redis:6-alpine
   weaviate: cr.weaviate.io/semitechnologies/weaviate:1.39.2
+  qdrant: langgenius/qdrant:v1.8.3
+  pgvector: pgvector/pgvector:pg16
+  pgvectoRs: tensorchord/pgvecto-rs:pg16-v0.3.0
+  chroma: ghcr.io/chroma-core/chroma:0.5.20
+  elasticsearch: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+  opensearch: opensearchproject/opensearch:2.19.1
   nginx: nginx:1.28-alpine
   squid: ubuntu/squid:6.6-24.04_edge
   wait: curlimages/curl:8.12.1
@@ -33,10 +40,11 @@ core:
 collaboration:
   enabled: true
 database:
+  type: postgresql
   mode: internal
   host: ""
-  port: 5432
-  username: postgres
+  port: 0
+  username: ""
   name: dify
   pluginName: dify_plugin
 redis:
@@ -48,8 +56,16 @@ vectorStore:
   mode: internal
   endpoint: ""
   grpcEndpoint: ""
+  config: {}
+  existingSecret: ""
 agent:
   enabled: true
+  runtime: local
+  config: {}
+  existingSecret: ""
+unstructured:
+  enabled: false
+  endpoint: ""
 security:
   existingSecret: ""
 networkPolicy:

@@ -46,7 +46,7 @@ independent scaling for compatibility with ordinary RWO storage. Split mode uses
 one Deployment per process and requires RWX for application files. Merely pointing
 uploads at S3 does not prove every local directory can stop being shared.
 
-Web, Nginx, the two Squid proxies, and Agent Backend are Deployments. PostgreSQL,
+Web, Nginx, the two Squid proxies, and Agent Backend are Deployments. PostgreSQL/MySQL,
 Redis (AOF enabled), Weaviate, Plugin Daemon, and Local Sandbox are singleton
 StatefulSets. The local sandbox has separate home/workspace claims. Initial volume
 size defaults to 10Gi **per claim**, not total. `persistence.existingClaim` replaces
@@ -78,6 +78,7 @@ The Secret must contain nonempty values under these exact keys:
 | DB_PASSWORD | PostgreSQL and plugin database |
 | REDIS_PASSWORD | Redis cache, Celery, Agent; use URL-safe characters in this version |
 | WEAVIATE_API_KEY | Weaviate and API |
+| VECTOR_STORE_PASSWORD | Bundled alternative vector store and its API client |
 | CODE_EXECUTION_API_KEY | API and code sandbox |
 | PLUGIN_DAEMON_KEY | API/Agent to Plugin Daemon |
 | INNER_API_KEY_FOR_PLUGIN | Plugin/Agent to API |
@@ -90,6 +91,9 @@ stable when it is re-enabled. The generated values meet these requirements.
 The sandbox receives only its own key; it does not receive database credentials.
 
 `ci/external.yaml` demonstrates externally managed PostgreSQL, Redis, and Weaviate.
+For bundled MySQL, set `database.type=mysql`: port 3306 and root user are derived.
+Use `database.username` and `database.port` for external services; port 0 selects
+the engine default. Bundled MySQL currently requires the root database account.
 Precreate the application and plugin databases and grant appropriate migration
 permissions. This release does not support Redis ACL usernames, Redis TLS, or
 PostgreSQL TLS configuration; do not use these examples where encryption in
@@ -163,6 +167,59 @@ Host `dist` over HTTPS and add the URL in Rancher Cluster Repositories. The dire
 layout is not a Rancher Git catalog; do not point Rancher at an arbitrary source
 subdirectory and expect discovery. OCI distribution is optional and must be checked
 against the selected Rancher version.
+
+## Optional Backends
+
+See `COMPATIBILITY.md` for the precise implementation and acceptance matrix.
+Seven vector backends have bundled templates: Weaviate, Qdrant, pgvector,
+pgvecto-rs, Chroma, Elasticsearch, and OpenSearch. Select `vectorStore.type` to
+derive both the workload and client configuration. Elasticsearch/OpenSearch need
+adequate memory and host kernel tuning supplied by the operator; this chart does
+not run privileged sysctl containers. Bundled OpenSearch uses its demo TLS
+certificate and explicitly disables client certificate verification. Replace that
+configuration with trusted TLS before production use.
+
+Other Compose vector types currently require externally provisioned services.
+The chart rejects unsupported internal selections rather than rendering incomplete
+workloads. Supply endpoint/user/database settings under `vectorStore.config` using
+the Dify environment variable names listed in `files/vector-backends.yaml`, and
+put credentials in `vectorStore.existingSecret` with native Dify key names:
+
+```yaml
+security:
+  existingSecret: dify-credentials
+vectorStore:
+  type: pgvector
+  mode: external
+  existingSecret: pgvector-credentials
+  config:
+    PGVECTOR_HOST: pgvector.example.internal
+    PGVECTOR_PORT: "5432"
+    PGVECTOR_USER: dify
+    PGVECTOR_DATABASE: dify_vector
+```
+
+Here `pgvector-credentials` contains `PGVECTOR_PASSWORD`. Sensitive values are
+rejected in `vectorStore.config`. External Weaviate uses the shared Secret's
+`WEAVIATE_API_KEY`. Do not switch a populated vector backend without a separate
+data migration; changing type is not a data migration or automatic backup.
+
+External Unstructured is enabled with `unstructured.enabled=true` and an API
+`unstructured.endpoint`; the service itself is not installed yet. An optional
+`UNSTRUCTURED_API_KEY` can be supplied through `extraEnvFrom`.
+
+Agent E2B/OpenShell are external runtime configuration adapters. Set `agent.runtime`
+and `agent.existingSecret`, and provide sandbox-reachable URLs through
+`agent.config.DIFY_AGENT_STUB_API_BASE_URL` and
+`agent.config.DIFY_AGENT_SANDBOX_FILES_BASE_URL`. The gateway exposes only
+`/agent-stub/` to the backend for external runtimes, not its run/control APIs.
+For a public gateway use `https://dify.example.com/agent-stub` and
+`https://dify.example.com` respectively. The runtime Secret contains native
+`DIFY_AGENT_E2B_API_KEY` or the appropriate `DIFY_AGENT_OPENSHELL_*` credentials.
+Non-sensitive runtime settings go in `agent.config`. OpenShell certificate file
+mounts are not implemented; use an appropriately secured bearer-token deployment
+or extend the Pod mounts after reviewing the runtime guide. No external accounts,
+gateways, templates, or workspace volumes are provisioned by this chart.
 
 ## Acceptance
 

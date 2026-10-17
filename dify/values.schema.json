@@ -3,10 +3,16 @@
   "type": "object",
   "properties": {
     "core": {"type": "object", "properties": {"mode": {"enum": ["compact", "split"]}}},
-    "database": {"type": "object", "properties": {"name": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}, "pluginName": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}, "mode": {"enum": ["internal", "external"]}, "port": {"type": "integer", "minimum": 1, "maximum": 65535}}},
-    "redis": {"type": "object", "properties": {"mode": {"enum": ["internal", "external"]}}},
-    "vectorStore": {"type": "object", "properties": {"type": {"enum": ["weaviate"]}, "mode": {"enum": ["internal", "external"]}}},
-    "exposure": {"type": "object", "properties": {"type": {"enum": ["ClusterIP", "NodePort", "LoadBalancer", "Ingress"]}, "publicUrl": {"type": "string", "pattern": "^https?://[^/]+"}}},
+    "database": {"type": "object", "properties": {"type": {"enum": ["postgresql", "mysql"]}, "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}, "pluginName": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}, "mode": {"enum": ["internal", "external"]}, "port": {"type": "integer", "minimum": 0, "maximum": 65535}}},
+    "agent": {"type": "object", "properties": {"enabled": {"type": "boolean"}, "runtime": {"enum": ["local", "e2b", "openshell"]}, "config": {"type": "object"}}},
+    "collaboration": {"type": "object", "properties": {"enabled": {"type": "boolean"}}},
+    "networkPolicy": {"type": "object", "properties": {"enabled": {"type": "boolean"}, "extraDnsCidrs": {"type": "array", "items": {"type": "string"}}}},
+    "unstructured": {"type": "object", "properties": {"enabled": {"type": "boolean"}, "endpoint": {"type": "string"}}},
+    "extraEnv": {"type": "object"},
+    "extraEnvFrom": {"type": "array"},
+    "redis": {"type": "object", "properties": {"mode": {"enum": ["internal", "external"]}, "port": {"type": "integer", "minimum": 1, "maximum": 65535}}},
+    "vectorStore": {"type": "object", "properties": {"type": {"enum": ["weaviate", "qdrant", "pgvector", "pgvecto-rs", "chroma", "elasticsearch", "elasticsearch-ja", "opensearch", "milvus", "oceanbase", "seekdb", "couchbase", "vastbase", "iris", "oracle", "opengauss", "myscale", "matrixone"]}, "mode": {"enum": ["internal", "external"]}, "config": {"type": "object"}}},
+    "exposure": {"type": "object", "properties": {"type": {"enum": ["ClusterIP", "NodePort", "LoadBalancer", "Ingress"]}, "publicUrl": {"type": "string", "pattern": "^https?://[^/]+"}, "trustedProxyCidrs": {"type": "array", "items": {"type": "string"}}, "tls": {"type": "object", "properties": {"enabled": {"type": "boolean"}, "secretName": {"type": "string"}}}}},
     "persistence": {"type": "object", "properties": {"accessMode": {"enum": ["ReadWriteOnce", "ReadWriteMany"]}, "size": {"type": "string", "minLength": 1}}}
   }
 }

@@ -2,12 +2,16 @@
 {{- $name := include "dify.name" . }}
 {{- $stores := list }}
 {{- if eq .Values.database.mode "internal" }}
+{{- if eq .Values.database.type "mysql" }}
+{{- $stores = append $stores (dict "name" "mysql" "image" .Values.images.mysql "port" 3306 "path" "/var/lib/mysql") }}
+{{- else }}
 {{- $stores = append $stores (dict "name" "postgres" "image" .Values.images.postgres "port" 5432 "path" "/var/lib/postgresql/data") }}
+{{- end }}
 {{- end }}
 {{- if eq .Values.redis.mode "internal" }}
 {{- $stores = append $stores (dict "name" "redis" "image" .Values.images.redis "port" 6379 "path" "/data") }}
 {{- end }}
-{{- if eq .Values.vectorStore.mode "internal" }}
+{{- if and (eq .Values.vectorStore.mode "internal") (eq .Values.vectorStore.type "weaviate") }}
 {{- $stores = append $stores (dict "name" "weaviate" "image" .Values.images.weaviate "port" 8080 "path" "/var/lib/weaviate") }}
 {{- end }}
 {{- range $store := $stores }}
@@ -58,12 +62,23 @@ spec:
           {{- if eq $store.name "postgres" }}
           env:
             - name: POSTGRES_USER
-              value: {{ $root.Values.database.username | quote }}
+              value: {{ include "dify.dbUser" $root | quote }}
             - name: POSTGRES_DB
               value: {{ $root.Values.database.name | quote }}
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dify.secret" $root }}
+                  key: DB_PASSWORD
+          {{- else if eq $store.name "mysql" }}
+          env:
+            - name: MYSQL_DATABASE
+              value: {{ $root.Values.database.name | quote }}
+            - name: MYSQL_ROOT_HOST
+              value: "%"
+            - name: MYSQL_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ include "dify.secret" $root }}

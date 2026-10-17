@@ -1,0 +1,107 @@
+{{- if and (eq .Values.vectorStore.mode "internal") (ne .Values.vectorStore.type "weaviate") }}
+{{- $name := include "dify.name" . }}
+{{- $type := .Values.vectorStore.type }}
+{{- $catalog := dict
+  "qdrant" (dict "image" .Values.images.qdrant "port" 6333 "path" "/qdrant/storage" "password" "QDRANT__SERVICE__API_KEY")
+  "pgvector" (dict "image" .Values.images.pgvector "port" 5432 "path" "/var/lib/postgresql/data" "password" "POSTGRES_PASSWORD")
+  "pgvecto-rs" (dict "image" .Values.images.pgvectoRs "port" 5432 "path" "/var/lib/postgresql/data" "password" "POSTGRES_PASSWORD")
+  "chroma" (dict "image" .Values.images.chroma "port" 8000 "path" "/chroma/chroma" "password" "CHROMA_SERVER_AUTHN_CREDENTIALS")
+  "elasticsearch" (dict "image" .Values.images.elasticsearch "port" 9200 "path" "/usr/share/elasticsearch/data" "password" "ELASTIC_PASSWORD")
+  "opensearch" (dict "image" .Values.images.opensearch "port" 9200 "path" "/usr/share/opensearch/data" "password" "OPENSEARCH_INITIAL_ADMIN_PASSWORD") }}
+{{- $store := get $catalog $type }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-vector
+spec:
+  selector:
+    {{- include "dify.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vector
+  ports:
+    - name: main
+      port: {{ $store.port }}
+      targetPort: main
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}-vector-{{ $type }}
+spec:
+  serviceName: {{ $name }}-vector
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dify.labels" . | nindent 6 }}
+      app.kubernetes.io/component: vector
+  template:
+    metadata:
+      labels:
+        {{- include "dify.labels" . | nindent 8 }}
+        app.kubernetes.io/component: vector
+    spec:
+      {{- include "dify.pod" . | nindent 6 }}
+      securityContext:
+        fsGroup: {{ ternary 1000 999 (has $type (list "elasticsearch" "opensearch")) }}
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: vector
+          image: {{ $store.image }}
+          ports:
+            - name: main
+              containerPort: {{ $store.port }}
+          env:
+            - name: {{ $store.password }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dify.secret" . }}
+                  key: VECTOR_STORE_PASSWORD
+            {{- if has $type (list "pgvector" "pgvecto-rs") }}
+            - name: POSTGRES_DB
+              value: dify
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            {{- else if eq $type "chroma" }}
+            - name: IS_PERSISTENT
+              value: "TRUE"
+            - name: CHROMA_SERVER_AUTHN_PROVIDER
+              value: chromadb.auth.token_authn.TokenAuthenticationServerProvider
+            {{- else if has $type (list "elasticsearch" "opensearch") }}
+            - name: discovery.type
+              value: single-node
+            {{- if eq $type "elasticsearch" }}
+            - name: xpack.security.enabled
+              value: "true"
+            - name: xpack.security.http.ssl.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: -Xms512m -Xmx512m
+            {{- else }}
+            - name: OPENSEARCH_JAVA_OPTS
+              value: -Xms512m -Xmx512m
+            {{- end }}
+            {{- end }}
+          startupProbe:
+            tcpSocket:
+              port: main
+            failureThreshold: 120
+            periodSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: main
+          resources: {{ toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ $store.path }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if .Values.persistence.storageClass }}
+        storageClassName: {{ .Values.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}
+{{- end }}

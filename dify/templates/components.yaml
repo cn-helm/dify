@@ -2,7 +2,10 @@
 {{- $name := include "dify.name" . }}
 {{- $components := list (dict "name" "web" "port" 3000 "image" .Values.images.web) (dict "name" "plugin" "port" 5002 "image" .Values.images.plugin "persistent" true) (dict "name" "sandbox" "port" 8194 "image" .Values.images.sandbox) }}
 {{- if .Values.agent.enabled }}
-{{- $components = concat $components (list (dict "name" "agent" "port" 5050 "image" .Values.images.agent) (dict "name" "local-sandbox" "port" 5004 "image" .Values.images.localSandbox "persistent" true)) }}
+{{- $components = append $components (dict "name" "agent" "port" 5050 "image" .Values.images.agent) }}
+{{- if eq .Values.agent.runtime "local" }}
+{{- $components = append $components (dict "name" "local-sandbox" "port" 5004 "image" .Values.images.localSandbox "persistent" true) }}
+{{- end }}
 {{- end }}
 {{- range $component := $components }}
 ---
@@ -57,6 +60,10 @@ spec:
           image: {{ $component.image }}
           {{- if has $component.name (list "web" "plugin" "agent") }}
           envFrom:
+            {{- if and (eq $component.name "agent") $root.Values.agent.existingSecret }}
+            - secretRef:
+                name: {{ $root.Values.agent.existingSecret }}
+            {{- end }}
             - configMapRef:
                 name: {{ $name }}-config
           {{- end }}
@@ -125,15 +132,21 @@ spec:
             - name: DIFY_AGENT_INNER_API_KEY
               value: $(INNER_API_KEY_FOR_PLUGIN)
             - name: DIFY_AGENT_RUNTIME_BACKEND
-              value: local
+              value: {{ $root.Values.agent.runtime }}
             - name: DIFY_AGENT_LOCAL_SANDBOX_ENDPOINT
               value: http://{{ $name }}-local-sandbox:5004
             - name: DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN
               value: $(SHELLCTL_AUTH_TOKEN)
             - name: DIFY_AGENT_STUB_API_BASE_URL
-              value: http://{{ $name }}-agent:5050/agent-stub
+              value: {{ default (printf "http://%s-agent:5050/agent-stub" $name) $root.Values.agent.config.DIFY_AGENT_STUB_API_BASE_URL | quote }}
             - name: DIFY_AGENT_SANDBOX_FILES_BASE_URL
-              value: http://{{ $name }}-api:5001
+              value: {{ default (printf "http://%s-api:5001" $name) $root.Values.agent.config.DIFY_AGENT_SANDBOX_FILES_BASE_URL | quote }}
+            {{- range $key, $value := $root.Values.agent.config }}
+            {{- if not (has $key (list "DIFY_AGENT_STUB_API_BASE_URL" "DIFY_AGENT_SANDBOX_FILES_BASE_URL")) }}
+            - name: {{ $key }}
+              value: {{ $value | toString | quote }}
+            {{- end }}
+            {{- end }}
             {{- else if eq $component.name "sandbox" }}
             - name: API_KEY
               value: $(CODE_EXECUTION_API_KEY)

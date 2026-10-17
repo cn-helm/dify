@@ -45,7 +45,7 @@ spec:
       restartPolicy: Never
       initContainers:
         - name: database-ready
-          image: {{ .Values.images.postgres }}
+          image: {{ ternary .Values.images.mysql .Values.images.postgres (eq .Values.database.type "mysql") }}
           envFrom:
             - configMapRef:
                 name: {{ $name }}-config
@@ -54,6 +54,15 @@ spec:
           command: [sh, -ec]
           args:
             - |
+              {{- if eq .Values.database.type "mysql" }}
+              export MYSQL_PWD="$DB_PASSWORD"
+              until mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USERNAME" "$DB_DATABASE" -e 'SELECT 1' >/dev/null 2>&1; do
+                echo 'Waiting for MySQL'; sleep 3
+              done
+              {{- if eq .Values.database.mode "internal" }}
+              mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USERNAME" -e 'CREATE DATABASE IF NOT EXISTS `{{ .Values.database.pluginName }}`'
+              {{- end }}
+              {{- else }}
               export PGPASSWORD="$DB_PASSWORD"
               until psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SELECT 1' >/dev/null 2>&1; do
                 echo 'Waiting for PostgreSQL'; sleep 3
@@ -62,6 +71,7 @@ spec:
               if ! psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -tAc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.database.pluginName }}'" | grep -q 1; then
                 createdb -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" '{{ .Values.database.pluginName }}'
               fi
+              {{- end }}
               {{- end }}
       containers:
         - name: migrate
