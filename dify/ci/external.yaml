@@ -1,0 +1,12 @@
+security:
+  existingSecret: dify-credentials
+database:
+  mode: external
+  host: postgres.example.internal
+redis:
+  mode: external
+  host: redis.example.internal
+vectorStore:
+  mode: external
+  endpoint: http://weaviate.example.internal:8080
+  grpcEndpoint: grpc://weaviate.example.internal:50051

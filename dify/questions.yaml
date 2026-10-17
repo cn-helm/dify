@@ -1,0 +1,138 @@
+questions:
+  - variable: exposure.type
+    label: Access Method
+    type: enum
+    options: [ClusterIP, Ingress, NodePort, LoadBalancer]
+    group: Access
+    required: true
+  - variable: exposure.host
+    label: Public Hostname
+    type: hostname
+    required: true
+    show_if: exposure.type=Ingress
+    group: Access
+  - variable: exposure.ingressClassName
+    label: Ingress Class
+    type: string
+    show_if: exposure.type=Ingress
+    group: Access
+  - variable: exposure.publicUrl
+    label: Public URL
+    description: Include the scheme and externally reachable port. Local port-forward defaults to http://localhost:8080.
+    type: string
+    group: Access
+  - variable: exposure.tls.enabled
+    label: Enable Ingress TLS
+    type: boolean
+    show_if: exposure.type=Ingress
+    group: Access
+    show_subquestion_if: "true"
+    subquestions:
+      - variable: exposure.tls.secretName
+        label: TLS Secret Name
+        description: Existing TLS Secret or the Secret managed by cert-manager through Ingress annotations.
+        type: string
+        required: true
+  - variable: persistence.storageClass
+    label: Storage Class
+    description: Leave empty to use the cluster default. A default class must exist in that case.
+    type: storageclass
+    group: Storage
+  - variable: persistence.size
+    label: Default Volume Size
+    description: Initial size of each volume. Existing claims are not resized automatically.
+    type: string
+    group: Storage
+  - variable: persistence.existingClaim
+    label: Existing Application Storage PVC
+    description: Optional. Must match the selected access mode. Other components still create their own volumes.
+    type: pvc
+    group: Storage
+  - variable: database.mode
+    label: PostgreSQL Deployment
+    type: enum
+    options: [internal, external]
+    group: Database
+    show_subquestion_if: external
+    subquestions:
+      - variable: database.host
+        label: PostgreSQL Host
+        type: string
+        required: true
+      - variable: database.port
+        label: PostgreSQL Port
+        type: int
+        min: 1
+        max: 65535
+      - variable: database.username
+        label: PostgreSQL User
+        type: string
+        required: true
+  - variable: database.name
+    label: Application Database
+    type: string
+    group: Database
+  - variable: database.pluginName
+    label: Plugin Database
+    type: string
+    group: Database
+  - variable: redis.mode
+    label: Redis Deployment
+    type: enum
+    options: [internal, external]
+    group: Redis
+    show_subquestion_if: external
+    subquestions:
+      - variable: redis.host
+        label: Redis Host
+        type: string
+        required: true
+      - variable: redis.port
+        label: Redis Port
+        type: int
+        min: 1
+        max: 65535
+  - variable: vectorStore.mode
+    label: Weaviate Deployment
+    type: enum
+    options: [internal, external]
+    group: Vector Store
+    show_subquestion_if: external
+    subquestions:
+      - variable: vectorStore.endpoint
+        label: Weaviate HTTP Endpoint
+        type: string
+        required: true
+      - variable: vectorStore.grpcEndpoint
+        label: Weaviate gRPC Endpoint
+        type: string
+        required: true
+  - variable: agent.enabled
+    label: Enable Agent and Local Sandbox
+    type: boolean
+    group: Agent
+  - variable: collaboration.enabled
+    label: Enable Workflow Collaboration
+    type: boolean
+    group: Features
+  - variable: security.existingSecret
+    label: Existing Credentials Secret
+    description: Required for external dependencies and GitOps. See README for exact key names. Password fields are not encryption.
+    type: secret
+    group: Security
+  - variable: networkPolicy.enabled
+    label: Enforce Sandbox Network Policies
+    description: Requires a NetworkPolicy-capable CNI. Disabling removes sandbox network isolation.
+    type: boolean
+    group: Security
+  - variable: core.mode
+    label: Core Deployment Mode
+    description: Compact shares RWO storage. Split requires RWX storage.
+    type: enum
+    options: [compact, split]
+    group: Advanced
+  - variable: persistence.accessMode
+    label: Application Storage Access Mode
+    type: enum
+    options: [ReadWriteOnce, ReadWriteMany]
+    group: Advanced

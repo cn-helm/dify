@@ -1,0 +1,6 @@
+security:
+  existingSecret: dify-credentials
+core:
+  mode: split
+persistence:
+  accessMode: ReadWriteMany

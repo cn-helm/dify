@@ -1,0 +1,26 @@
+Dify {{ .Chart.AppVersion }}
+
+{{- if eq .Values.exposure.type "Ingress" }}
+URL: {{ include "dify.url" . }}
+{{- else }}
+For local access:
+  kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "dify.name" . }}-nginx 8080:80
+  Open http://localhost:8080
+
+Public callbacks require exposure.publicUrl to match your externally reachable URL.
+{{- end }}
+
+Credentials Secret: {{ include "dify.secret" . }}
+Back up this Secret with all database, application, plugin, and sandbox volumes.
+Do not rotate encryption keys when upgrading an existing installation.
+
+NetworkPolicy enforcement requires a compatible CNI. Validate sandbox egress
+before processing untrusted code. The chart does not install a CNI or CSI driver.
+{{- if not .Values.networkPolicy.enabled }}
+WARNING: NetworkPolicy is disabled; sandbox network isolation is not enforced.
+{{- end }}
+
+Migration Job: {{ include "dify.name" . }}-migrate-{{ .Release.Revision }}
+Inspect failed installations with kubectl logs job/<migration-job> --all-containers.
+Old migration Jobs must be retained until no Pod refers to their revision.
+Database schema changes are not undone by helm rollback.
