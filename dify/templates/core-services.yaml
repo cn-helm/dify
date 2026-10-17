@@ -1,0 +1,20 @@
+{{- $root := . }}
+{{- $roles := list "api" }}
+{{- if .Values.collaboration.enabled }}
+{{- $roles = append $roles "websocket" }}
+{{- end }}
+{{- range $role := $roles }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dify.name" $root }}-{{ $role }}
+spec:
+  selector:
+    {{- include "dify.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ ternary "core" $role (eq $root.Values.core.mode "compact") }}
+  ports:
+    - name: http
+      port: {{ ternary 5006 5001 (eq $role "websocket") }}
+      targetPort: {{ $role }}
+{{- end }}

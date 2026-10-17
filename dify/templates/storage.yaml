@@ -1,0 +1,10 @@
+{{- if not .Values.persistence.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "dify.claim" . }}
+  labels: {{ include "dify.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+spec: {{ include "dify.volumeClaim" . | nindent 2 }}
+{{- end }}

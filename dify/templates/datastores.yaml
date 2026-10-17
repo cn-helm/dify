@@ -1,0 +1,127 @@
+{{- $root := . }}
+{{- $name := include "dify.name" . }}
+{{- $stores := list }}
+{{- if eq .Values.database.mode "internal" }}
+{{- $stores = append $stores (dict "name" "postgres" "image" .Values.images.postgres "port" 5432 "path" "/var/lib/postgresql/data") }}
+{{- end }}
+{{- if eq .Values.redis.mode "internal" }}
+{{- $stores = append $stores (dict "name" "redis" "image" .Values.images.redis "port" 6379 "path" "/data") }}
+{{- end }}
+{{- if eq .Values.vectorStore.mode "internal" }}
+{{- $stores = append $stores (dict "name" "weaviate" "image" .Values.images.weaviate "port" 8080 "path" "/var/lib/weaviate") }}
+{{- end }}
+{{- range $store := $stores }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-{{ $store.name }}
+spec:
+  selector:
+    {{- include "dify.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $store.name }}
+  ports:
+    - name: main
+      port: {{ $store.port }}
+      targetPort: main
+    {{- if eq $store.name "weaviate" }}
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+    {{- end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}-{{ $store.name }}
+  labels: {{ include "dify.labels" $root | nindent 4 }}
+spec:
+  serviceName: {{ $name }}-{{ $store.name }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dify.labels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $store.name }}
+  template:
+    metadata:
+      labels:
+        {{- include "dify.labels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $store.name }}
+    spec:
+      {{- include "dify.pod" $root | nindent 6 }}
+      containers:
+        - name: {{ $store.name }}
+          image: {{ $store.image }}
+          ports:
+            - name: main
+              containerPort: {{ $store.port }}
+          {{- if eq $store.name "postgres" }}
+          env:
+            - name: POSTGRES_USER
+              value: {{ $root.Values.database.username | quote }}
+            - name: POSTGRES_DB
+              value: {{ $root.Values.database.name | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dify.secret" $root }}
+                  key: DB_PASSWORD
+          {{- else if eq $store.name "redis" }}
+          command: [sh, -ec]
+          args: ['exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"']
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dify.secret" $root }}
+                  key: REDIS_PASSWORD
+          {{- else }}
+          env:
+            - name: PERSISTENCE_DATA_PATH
+              value: /var/lib/weaviate
+            - name: DEFAULT_VECTORIZER_MODULE
+              value: none
+            - name: CLUSTER_HOSTNAME
+              value: node1
+            - name: AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED
+              value: "false"
+            - name: AUTHENTICATION_APIKEY_ENABLED
+              value: "true"
+            - name: AUTHENTICATION_APIKEY_ALLOWED_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dify.secret" $root }}
+                  key: WEAVIATE_API_KEY
+            - name: AUTHENTICATION_APIKEY_USERS
+              value: hello@dify.ai
+            - name: AUTHORIZATION_ADMINLIST_ENABLED
+              value: "true"
+            - name: AUTHORIZATION_ADMINLIST_USERS
+              value: hello@dify.ai
+          {{- end }}
+          startupProbe:
+            tcpSocket:
+              port: main
+            periodSeconds: 5
+            failureThreshold: 120
+          readinessProbe:
+            tcpSocket:
+              port: main
+          resources: {{ toYaml $root.Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ $store.path }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if $root.Values.persistence.storageClass }}
+        storageClassName: {{ $root.Values.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $root.Values.persistence.size }}
+{{- end }}

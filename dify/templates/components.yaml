@@ -1,0 +1,197 @@
+{{- $root := . }}
+{{- $name := include "dify.name" . }}
+{{- $components := list (dict "name" "web" "port" 3000 "image" .Values.images.web) (dict "name" "plugin" "port" 5002 "image" .Values.images.plugin "persistent" true) (dict "name" "sandbox" "port" 8194 "image" .Values.images.sandbox) }}
+{{- if .Values.agent.enabled }}
+{{- $components = concat $components (list (dict "name" "agent" "port" 5050 "image" .Values.images.agent) (dict "name" "local-sandbox" "port" 5004 "image" .Values.images.localSandbox "persistent" true)) }}
+{{- end }}
+{{- range $component := $components }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-{{ $component.name }}
+spec:
+  selector:
+    {{- include "dify.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $component.name }}
+  ports:
+    - name: http
+      port: {{ $component.port }}
+      targetPort: http
+    {{- if eq $component.name "plugin" }}
+    - name: debug
+      port: 5003
+      targetPort: 5003
+    {{- end }}
+---
+apiVersion: apps/v1
+kind: {{ ternary "StatefulSet" "Deployment" ($component.persistent | default false) }}
+metadata:
+  name: {{ $name }}-{{ $component.name }}
+  labels: {{ include "dify.labels" $root | nindent 4 }}
+spec:
+  {{- if $component.persistent }}
+  serviceName: {{ $name }}-{{ $component.name }}
+  {{- end }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dify.labels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $component.name }}
+  template:
+    metadata:
+      labels:
+        {{- include "dify.labels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $component.name }}
+      annotations:
+        checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+    spec:
+      {{- include "dify.pod" $root | nindent 6 }}
+      {{- if $component.persistent }}
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
+      {{- end }}
+      containers:
+        - name: {{ $component.name }}
+          image: {{ $component.image }}
+          {{- if has $component.name (list "web" "plugin" "agent") }}
+          envFrom:
+            - configMapRef:
+                name: {{ $name }}-config
+          {{- end }}
+          {{- if eq $component.name "local-sandbox" }}
+          command: [shellctl, serve, --listen, "0.0.0.0:5004", --require-auth-token]
+          {{- end }}
+          env:
+            {{- $keys := list }}
+            {{- if eq $component.name "plugin" }}
+            {{- $keys = list "DB_PASSWORD" "REDIS_PASSWORD" "PLUGIN_DAEMON_KEY" "INNER_API_KEY_FOR_PLUGIN" }}
+            {{- else if eq $component.name "agent" }}
+            {{- $keys = list "REDIS_PASSWORD" "PLUGIN_DAEMON_KEY" "INNER_API_KEY_FOR_PLUGIN" "AGENT_BACKEND_API_TOKEN" "DIFY_AGENT_SERVER_SECRET_KEY" "SHELLCTL_AUTH_TOKEN" }}
+            {{- else if eq $component.name "sandbox" }}
+            {{- $keys = list "CODE_EXECUTION_API_KEY" }}
+            {{- else if eq $component.name "local-sandbox" }}
+            {{- $keys = list "SHELLCTL_AUTH_TOKEN" }}
+            {{- end }}
+            {{- range $key := $keys }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dify.secret" $root }}
+                  key: {{ $key }}
+            {{- end }}
+            {{- if eq $component.name "web" }}
+            - name: SERVER_CONSOLE_API_URL
+              value: http://{{ $name }}-api:5001
+            - name: NEXT_TELEMETRY_DISABLED
+              value: "1"
+            {{- else if eq $component.name "plugin" }}
+            - name: DB_DATABASE
+              value: {{ $root.Values.database.pluginName | quote }}
+            - name: DB_SSL_MODE
+              value: disable
+            - name: SERVER_PORT
+              value: "5002"
+            - name: SERVER_KEY
+              value: $(PLUGIN_DAEMON_KEY)
+            - name: DIFY_INNER_API_KEY
+              value: $(INNER_API_KEY_FOR_PLUGIN)
+            - name: DIFY_INNER_API_URL
+              value: http://{{ $name }}-api:5001
+            - name: PLUGIN_STORAGE_TYPE
+              value: local
+            - name: PLUGIN_STORAGE_LOCAL_ROOT
+              value: /app/storage
+            - name: PLUGIN_WORKING_PATH
+              value: /app/storage/cwd
+            - name: FORCE_VERIFYING_SIGNATURE
+              value: "true"
+            - name: PLUGIN_REMOTE_INSTALLING_HOST
+              value: "0.0.0.0"
+            - name: PLUGIN_REMOTE_INSTALLING_PORT
+              value: "5003"
+            {{- else if eq $component.name "agent" }}
+            - name: DIFY_AGENT_API_TOKEN
+              value: $(AGENT_BACKEND_API_TOKEN)
+            - name: DIFY_AGENT_REDIS_URL
+              value: {{ printf "redis://:$(REDIS_PASSWORD)@%s:%v/2" (ternary (printf "%s-redis" $name) $root.Values.redis.host (eq $root.Values.redis.mode "internal")) $root.Values.redis.port | quote }}
+            - name: DIFY_AGENT_PLUGIN_DAEMON_URL
+              value: http://{{ $name }}-plugin:5002
+            - name: DIFY_AGENT_PLUGIN_DAEMON_API_KEY
+              value: $(PLUGIN_DAEMON_KEY)
+            - name: DIFY_AGENT_INNER_API_URL
+              value: http://{{ $name }}-api:5001
+            - name: DIFY_AGENT_INNER_API_KEY
+              value: $(INNER_API_KEY_FOR_PLUGIN)
+            - name: DIFY_AGENT_RUNTIME_BACKEND
+              value: local
+            - name: DIFY_AGENT_LOCAL_SANDBOX_ENDPOINT
+              value: http://{{ $name }}-local-sandbox:5004
+            - name: DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN
+              value: $(SHELLCTL_AUTH_TOKEN)
+            - name: DIFY_AGENT_STUB_API_BASE_URL
+              value: http://{{ $name }}-agent:5050/agent-stub
+            - name: DIFY_AGENT_SANDBOX_FILES_BASE_URL
+              value: http://{{ $name }}-api:5001
+            {{- else if eq $component.name "sandbox" }}
+            - name: API_KEY
+              value: $(CODE_EXECUTION_API_KEY)
+            - name: GIN_MODE
+              value: release
+            - name: ENABLE_NETWORK
+              value: "true"
+            - name: SANDBOX_PORT
+              value: "8194"
+            - name: HTTP_PROXY
+              value: http://{{ $name }}-ssrf-proxy:3128
+            - name: HTTPS_PROXY
+              value: http://{{ $name }}-ssrf-proxy:3128
+            {{- else }}
+            - name: HTTP_PROXY
+              value: http://{{ $name }}-agent-proxy:3128
+            - name: HTTPS_PROXY
+              value: http://{{ $name }}-agent-proxy:3128
+            - name: NO_PROXY
+              value: localhost,127.0.0.1
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $component.port }}
+          startupProbe:
+            tcpSocket:
+              port: http
+            failureThreshold: 120
+            periodSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: http
+          resources: {{ toYaml $root.Values.resources | nindent 12 }}
+          {{- if $component.persistent }}
+          volumeMounts:
+            {{- if eq $component.name "plugin" }}
+            - name: data
+              mountPath: /app/storage
+            {{- else }}
+            - name: data
+              mountPath: /home/dify
+              subPath: home
+            - name: data
+              mountPath: /workspace
+              subPath: workspace
+            {{- end }}
+          {{- end }}
+  {{- if $component.persistent }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if $root.Values.persistence.storageClass }}
+        storageClassName: {{ $root.Values.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $root.Values.persistence.size }}
+  {{- end }}
+{{- end }}

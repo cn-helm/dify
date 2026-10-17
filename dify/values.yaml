@@ -12,7 +12,7 @@ images:
   weaviate: cr.weaviate.io/semitechnologies/weaviate:1.39.2
   nginx: nginx:1.28-alpine
   squid: ubuntu/squid:6.13-24.10_edge
-  kubectl: registry.k8s.io/kubectl:v1.31.14
+  wait: curlimages/curl:8.12.1
 exposure:
   type: ClusterIP
   host: ""

@@ -1,0 +1,62 @@
+{{- $name := include "dify.name" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-config
+  labels: {{ include "dify.labels" . | nindent 4 }}
+data:
+  DEPLOY_ENV: PRODUCTION
+  DEPLOYMENT_EDITION: COMMUNITY
+  LANG: C.UTF-8
+  LC_ALL: C.UTF-8
+  PYTHONIOENCODING: utf-8
+  LOG_LEVEL: INFO
+  LOG_OUTPUT_FORMAT: json
+  LOG_FILE: /tmp/dify.log
+  MIGRATION_ENABLED: "false"
+  DIFY_BIND_ADDRESS: "0.0.0.0"
+  DIFY_PORT: "5001"
+  SERVER_WORKER_AMOUNT: "1"
+  SERVER_WORKER_CLASS: gevent
+  SERVER_WORKER_CONNECTIONS: "10"
+  CELERY_WORKER_AMOUNT: "4"
+  GUNICORN_TIMEOUT: "360"
+  DB_TYPE: postgresql
+  DB_HOST: {{ ternary (printf "%s-postgres" $name) .Values.database.host (eq .Values.database.mode "internal") | quote }}
+  DB_PORT: {{ .Values.database.port | quote }}
+  DB_USERNAME: {{ .Values.database.username | quote }}
+  DB_DATABASE: {{ .Values.database.name | quote }}
+  REDIS_HOST: {{ ternary (printf "%s-redis" $name) .Values.redis.host (eq .Values.redis.mode "internal") | quote }}
+  REDIS_PORT: {{ .Values.redis.port | quote }}
+  REDIS_DB: "0"
+  CELERY_BACKEND: redis
+  STORAGE_TYPE: opendal
+  OPENDAL_SCHEME: fs
+  OPENDAL_FS_ROOT: storage
+  VECTOR_STORE: weaviate
+  WEAVIATE_ENDPOINT: {{ default (printf "http://%s-weaviate:8080" $name) .Values.vectorStore.endpoint | quote }}
+  WEAVIATE_GRPC_ENDPOINT: {{ default (printf "grpc://%s-weaviate:50051" $name) .Values.vectorStore.grpcEndpoint | quote }}
+  CODE_EXECUTION_ENDPOINT: http://{{ $name }}-sandbox:8194
+  SSRF_PROXY_HTTP_URL: http://{{ $name }}-ssrf-proxy:3128
+  SSRF_PROXY_HTTPS_URL: http://{{ $name }}-ssrf-proxy:3128
+  PLUGIN_DAEMON_URL: http://{{ $name }}-plugin:5002
+  PLUGIN_REMOTE_INSTALL_HOST: localhost
+  PLUGIN_REMOTE_INSTALL_PORT: "5003"
+  PLUGIN_MAX_PACKAGE_SIZE: "52428800"
+  ENABLE_COLLABORATION_MODE: {{ .Values.collaboration.enabled | quote }}
+  ENABLE_SKILL: "true"
+  CONSOLE_API_URL: {{ include "dify.url" . | quote }}
+  CONSOLE_WEB_URL: {{ include "dify.url" . | quote }}
+  SERVICE_API_URL: {{ include "dify.url" . | quote }}
+  APP_API_URL: {{ include "dify.url" . | quote }}
+  APP_WEB_URL: {{ include "dify.url" . | quote }}
+  FILES_URL: {{ include "dify.url" . | quote }}
+  INTERNAL_FILES_URL: http://{{ $name }}-api:5001
+  TRIGGER_URL: {{ include "dify.url" . | quote }}
+  ENDPOINT_URL_TEMPLATE: {{ printf "%s/e/{hook_id}" (include "dify.url" .) | quote }}
+  NEXT_PUBLIC_SOCKET_URL: {{ include "dify.url" . | replace "https://" "wss://" | replace "http://" "ws://" | quote }}
+  RESPECT_XFORWARD_HEADERS_ENABLED: "true"
+  AGENT_BACKEND_BASE_URL: http://{{ $name }}-agent:5050
+{{- range $key, $value := .Values.extraEnv }}
+  {{ $key }}: {{ $value | toString | quote }}
+{{- end }}

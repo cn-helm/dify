@@ -1,0 +1,127 @@
+{{- $root := . }}
+{{- $name := include "dify.name" . }}
+{{- $roles := list "api" "worker" "beat" }}
+{{- if .Values.collaboration.enabled }}
+{{- $roles = append $roles "websocket" }}
+{{- end }}
+{{- $groups := list $roles }}
+{{- if eq .Values.core.mode "split" }}
+{{- $groups = list }}
+{{- range $role := $roles }}
+{{- $groups = append $groups (list $role) }}
+{{- end }}
+{{- end }}
+{{- range $group := $groups }}
+{{- $component := ternary "core" (first $group) (eq $root.Values.core.mode "compact") }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}-{{ $component }}
+  labels: {{ include "dify.labels" $root | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "dify.labels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $component }}
+  template:
+    metadata:
+      labels:
+        {{- include "dify.labels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $component }}
+      annotations:
+        checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+        dify.ai/revision: {{ $root.Release.Revision | quote }}
+    spec:
+      {{- include "dify.pod" $root | nindent 6 }}
+      serviceAccountName: {{ $name }}-migration-wait
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
+      terminationGracePeriodSeconds: 90
+      initContainers:
+        - name: migration-complete
+          image: {{ $root.Values.images.wait }}
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              for attempt in $(seq 1 600); do
+                status=$(curl -fsS --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+                  -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+                  "https://kubernetes.default.svc/apis/batch/v1/namespaces/$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)/jobs/{{ $name }}-migrate-{{ $root.Release.Revision }}" || true)
+                if printf '%s' "$status" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"Complete"'; then exit 0; fi
+                if printf '%s' "$status" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"Failed"'; then echo 'Database migration failed'; exit 1; fi
+                sleep 3
+              done
+              echo 'Timed out waiting for database migration'; exit 1
+          volumeMounts:
+            - name: api-access
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+      containers:
+        {{- range $role := $group }}
+        - name: {{ $role }}
+          image: {{ $root.Values.images.api }}
+          {{- include "dify.env" $root | nindent 10 }}
+          env:
+            - name: MODE
+              value: {{ ternary "api" $role (eq $role "websocket") }}
+            {{- include "dify.broker" $root | nindent 12 }}
+            {{- if has $role (list "api" "websocket") }}
+            - name: DIFY_PORT
+              value: {{ ternary "5006" "5001" (eq $role "websocket") | quote }}
+            {{- if eq $role "websocket" }}
+            - name: SERVER_WORKER_CLASS
+              value: geventwebsocket.gunicorn.workers.GeventWebSocketWorker
+            - name: SERVER_WORKER_CONNECTIONS
+              value: "1000"
+            {{- end }}
+          ports:
+            - name: {{ $role }}
+              containerPort: {{ ternary 5006 5001 (eq $role "websocket") }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: {{ $role }}
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ $role }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ $role }}
+            periodSeconds: 30
+            timeoutSeconds: 5
+            {{- end }}
+          resources: {{ toYaml $root.Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: storage
+              mountPath: /app/api/storage
+        {{- end }}
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: {{ include "dify.claim" $root }}
+        - name: api-access
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+              - downwardAPI:
+                  items:
+                    - path: namespace
+                      fieldRef:
+                        fieldPath: metadata.namespace
+{{- end }}

@@ -1,0 +1,75 @@
+{{- $name := include "dify.name" . }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}-migration-wait
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}-migration-wait
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    resourceNames: [{{ printf "%s-migrate-%v" $name .Release.Revision | quote }}]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}-migration-wait
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}-migration-wait
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}-migration-wait
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}-migrate-{{ .Release.Revision }}
+  labels: {{ include "dify.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels:
+        {{- include "dify.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
+    spec:
+      {{- include "dify.pod" . | nindent 6 }}
+      restartPolicy: Never
+      initContainers:
+        - name: database-ready
+          image: {{ .Values.images.postgres }}
+          envFrom:
+            - configMapRef:
+                name: {{ $name }}-config
+            - secretRef:
+                name: {{ include "dify.secret" . }}
+          command: [sh, -ec]
+          args:
+            - |
+              export PGPASSWORD="$DB_PASSWORD"
+              until psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -c 'SELECT 1' >/dev/null 2>&1; do
+                echo 'Waiting for PostgreSQL'; sleep 3
+              done
+              {{- if eq .Values.database.mode "internal" }}
+              if ! psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" -d "$DB_DATABASE" -tAc "SELECT 1 FROM pg_database WHERE datname = '{{ .Values.database.pluginName }}'" | grep -q 1; then
+                createdb -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" '{{ .Values.database.pluginName }}'
+              fi
+              {{- end }}
+      containers:
+        - name: migrate
+          image: {{ .Values.images.api }}
+          {{- include "dify.env" . | nindent 10 }}
+          env:
+            - name: MODE
+              value: migration
+            - name: MIGRATION_ENABLED
+              value: "true"
+            {{- include "dify.broker" . | nindent 12 }}
