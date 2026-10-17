@@ -1,9 +1,7 @@
 name: Helm Chart
 on:
-  push:
-    paths: [dify/**, .github/workflows/chart.yaml]
-  pull_request:
-    paths: [dify/**, .github/workflows/chart.yaml]
+  push: {}
+  pull_request: {}
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,13 +23,13 @@ jobs:
         run: |
           curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar -xz -C /tmp kubeconform
           mkdir -p /tmp/dify-schema-cache
-      - run: helm lint dify
-      - run: ruby dify/tests/validate.rb
+      - run: helm lint .
+      - run: ruby tests/validate.rb
         env:
           KUBECONFORM: /tmp/kubeconform
           KUBERNETES_VERSION: ${{ matrix.kubernetes }}
       - name: Package
-        run: helm package dify --destination dist
+        run: helm package . --destination dist
       - uses: actions/upload-artifact@v4
         with:
           name: dify-chart-k8s-${{ matrix.kubernetes }}

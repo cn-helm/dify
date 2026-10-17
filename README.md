@@ -13,10 +13,10 @@ as Calico or Cilium. The minimum Kubernetes version describes API compatibility,
 not a tested runtime support matrix. Image architectures and registry access must
 be checked for your cluster, particularly the Compose plugin `0.6.10-local` tag.
 
-From the parent of this repository:
+From this standalone chart repository root:
 
 ```sh
-helm install dify ./helm/dify -n dify --create-namespace \
+helm install dify . -n dify --create-namespace \
   --wait --wait-for-jobs --timeout 35m
 kubectl -n dify port-forward service/dify-dify-nginx 8080:80
 ```
@@ -24,8 +24,8 @@ kubectl -n dify port-forward service/dify-dify-nginx 8080:80
 Open `http://localhost:8080` and complete administrator setup. No model-provider
 credentials are bundled. Public webhooks cannot reach a local port-forward.
 
-When running inside the standalone `helm` repository, replace `./helm/dify` with
-`./dify`. No dependency downloads are required for the default installation.
+When running from the parent Dify workspace, replace `.` with `./helm`.
+No dependency downloads are required for the default installation.
 
 For public access, start from `ci/ingress.yaml`; change the hostname, IngressClass,
 and TLS Secret. Its existingSecret entry is an example, not a mandatory requirement
@@ -159,7 +159,7 @@ Publish a standard Helm repository (run from this repository root):
 
 ```sh
 mkdir -p dist
-helm package dify --destination dist
+helm package . --destination dist
 helm repo index dist --url https://charts.example.com/dify
 ```
 
@@ -223,7 +223,7 @@ gateways, templates, or workspace volumes are provisioned by this chart.
 
 ## Acceptance
 
-Run `ruby dify/tests/validate.rb` from the chart repository when the test suite is
+Run `ruby tests/validate.rb` from the chart repository when the test suite is
 present. CI also validates rendered resources against Kubernetes schemas.
 
 Runtime acceptance requires a disposable cluster with a real CSI and enforcing

@@ -1,0 +1,7 @@
+.git/
+.github/
+dist/
+plan.md
+tests/
+ci/
+*.tgz
