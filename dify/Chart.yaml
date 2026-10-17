@@ -1,0 +1,10 @@
+apiVersion: v2
+name: dify
+description: Dify with integrated dependencies and Rancher configuration
+type: application
+version: 0.1.0
+appVersion: "1.17.1"
+kubeVersion: ">=1.26.0-0"
+annotations:
+  catalog.cattle.io/display-name: Dify
+  catalog.cattle.io/os: linux

@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "core": {"type": "object", "properties": {"mode": {"enum": ["compact", "split"]}}},
+    "database": {"type": "object", "properties": {"mode": {"enum": ["internal", "external"]}, "port": {"type": "integer", "minimum": 1, "maximum": 65535}}},
+    "redis": {"type": "object", "properties": {"mode": {"enum": ["internal", "external"]}}},
+    "vectorStore": {"type": "object", "properties": {"type": {"enum": ["weaviate"]}, "mode": {"enum": ["internal", "external"]}}},
+    "exposure": {"type": "object", "properties": {"type": {"enum": ["ClusterIP", "NodePort", "LoadBalancer", "Ingress"]}, "publicUrl": {"type": "string", "pattern": "^https?://[^/]+"}}},
+    "persistence": {"type": "object", "properties": {"accessMode": {"enum": ["ReadWriteOnce", "ReadWriteMany"]}, "size": {"type": "string", "minLength": 1}}}
+  }
+}

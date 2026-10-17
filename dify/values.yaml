@@ -1,0 +1,65 @@
+nameOverride: ""
+imagePullSecrets: []
+images:
+  api: langgenius/dify-api:1.17.1
+  web: langgenius/dify-web:1.17.1
+  plugin: langgenius/dify-plugin-daemon:0.6.10-local
+  agent: langgenius/dify-agent-backend:1.17.1
+  localSandbox: langgenius/dify-agent-local-sandbox:1.17.1
+  sandbox: langgenius/dify-sandbox:0.2.15
+  postgres: postgres:15-alpine
+  redis: redis:6-alpine
+  weaviate: cr.weaviate.io/semitechnologies/weaviate:1.39.2
+  nginx: nginx:1.28-alpine
+  squid: ubuntu/squid:6.13-24.10_edge
+  kubectl: registry.k8s.io/kubectl:v1.31.14
+exposure:
+  type: ClusterIP
+  host: ""
+  publicUrl: http://localhost:8080
+  ingressClassName: ""
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: ""
+persistence:
+  storageClass: ""
+  size: 10Gi
+  accessMode: ReadWriteOnce
+  existingClaim: ""
+core:
+  mode: compact
+collaboration:
+  enabled: true
+database:
+  mode: internal
+  host: ""
+  port: 5432
+  username: postgres
+  name: dify
+  pluginName: dify_plugin
+redis:
+  mode: internal
+  host: ""
+  port: 6379
+vectorStore:
+  type: weaviate
+  mode: internal
+  endpoint: ""
+  grpcEndpoint: ""
+agent:
+  enabled: true
+security:
+  existingSecret: ""
+networkPolicy:
+  enabled: true
+  dnsNamespace: kube-system
+  dnsPodLabels:
+    k8s-app: kube-dns
+  extraDnsCidrs: []
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+extraEnv: {}
+extraEnvFrom: []

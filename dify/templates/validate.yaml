@@ -1,0 +1,23 @@
+{{- if and (eq .Values.core.mode "split") (ne .Values.persistence.accessMode "ReadWriteMany") -}}
+{{- fail "split mode requires ReadWriteMany shared storage" -}}
+{{- end -}}
+{{- if eq .Values.exposure.type "Ingress" -}}
+{{- $_ := required "Ingress requires exposure.host" .Values.exposure.host -}}
+{{- if .Values.exposure.tls.enabled -}}
+{{- $_ := required "TLS requires exposure.tls.secretName" .Values.exposure.tls.secretName -}}
+{{- end -}}
+{{- end -}}
+{{- if eq .Values.database.mode "external" -}}
+{{- $_ := required "External database requires database.host" .Values.database.host -}}
+{{- end -}}
+{{- if eq .Values.redis.mode "external" -}}
+{{- $_ := required "External Redis requires redis.host" .Values.redis.host -}}
+{{- end -}}
+{{- if eq .Values.vectorStore.mode "external" -}}
+{{- $_ := required "External vector store requires vectorStore.endpoint" .Values.vectorStore.endpoint -}}
+{{- end -}}
+{{- range $key, $value := .Values.extraEnv -}}
+{{- if or (hasPrefix "DB_" $key) (hasPrefix "REDIS_" $key) (hasPrefix "PLUGIN_" $key) (hasPrefix "DIFY_AGENT_" $key) (hasPrefix "AGENT_BACKEND_" $key) (has $key (list "SECRET_KEY" "MODE" "MIGRATION_ENABLED" "DIFY_PORT" "CELERY_BROKER_URL" "INNER_API_KEY_FOR_PLUGIN" "CODE_EXECUTION_API_KEY" "VECTOR_STORE" "WEAVIATE_API_KEY" "WEAVIATE_ENDPOINT" "WEAVIATE_GRPC_ENDPOINT")) -}}
+{{- fail (printf "extraEnv.%s is managed by the chart" $key) -}}
+{{- end -}}
+{{- end -}}
