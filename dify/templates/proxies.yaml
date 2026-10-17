@@ -1,0 +1,99 @@
+{{- $root := . }}
+{{- $name := include "dify.name" . }}
+{{- $proxies := list "ssrf-proxy" }}
+{{- if .Values.agent.enabled }}
+{{- $proxies = append $proxies "agent-proxy" }}
+{{- end }}
+{{- range $proxy := $proxies }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-{{ $proxy }}
+data:
+  squid.conf: |
+    http_port 3128
+    pid_filename /tmp/squid.pid
+    coredump_dir /tmp
+    cache deny all
+    access_log stdio:/dev/stdout
+    cache_log /dev/stderr
+    logfile_rotate 0
+    acl SSL_ports port 443
+    acl Safe_ports port 80 443 1025-65535
+    acl CONNECT method CONNECT
+    acl private dst 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4
+    acl private dst ::/128 ::1/128 ::ffff:0:0/96 ::/96 fc00::/7 fe80::/10
+    http_access deny !Safe_ports
+    http_access deny CONNECT !SSL_ports
+    {{- if eq $proxy "agent-proxy" }}
+    acl agent dstdomain {{ $name }}-agent {{ $name }}-agent.{{ $root.Release.Namespace }}.svc.cluster.local
+    acl api dstdomain {{ $name }}-api {{ $name }}-api.{{ $root.Release.Namespace }}.svc.cluster.local
+    acl stub_path urlpath_regex ^/agent-stub/
+    acl files_path urlpath_regex ^/files/
+    http_access allow agent stub_path
+    http_access allow api files_path
+    {{- end }}
+    {{- with $root.Values.proxy.allowedPrivateCidrs }}
+    acl allowed_private dst {{ join " " . }}
+    http_access allow allowed_private
+    {{- end }}
+    {{- with $root.Values.proxy.allowedPrivateDomains }}
+    acl allowed_domains dstdomain {{ join " " . }}
+    http_access allow allowed_domains
+    {{- end }}
+    http_access deny private
+    http_access allow all
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-{{ $proxy }}
+spec:
+  selector:
+    {{- include "dify.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $proxy }}
+  ports:
+    - name: proxy
+      port: 3128
+      targetPort: proxy
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}-{{ $proxy }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dify.labels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $proxy }}
+  template:
+    metadata:
+      labels:
+        {{- include "dify.labels" $root | nindent 8 }}
+        app.kubernetes.io/component: {{ $proxy }}
+      annotations:
+        checksum/proxy: {{ toJson $root.Values.proxy | sha256sum }}
+    spec:
+      {{- include "dify.pod" $root | nindent 6 }}
+      containers:
+        - name: squid
+          image: {{ $root.Values.images.squid }}
+          command: [/usr/sbin/squid, -N, -f, /etc/squid/squid.conf]
+          ports:
+            - name: proxy
+              containerPort: 3128
+          readinessProbe:
+            tcpSocket:
+              port: proxy
+          resources: {{ toYaml $root.Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/squid/squid.conf
+              subPath: squid.conf
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}-{{ $proxy }}
+{{- end }}

@@ -175,10 +175,8 @@ spec:
             {{- else }}
             - name: data
               mountPath: /home/dify
-              subPath: home
-            - name: data
+            - name: workspace
               mountPath: /workspace
-              subPath: workspace
             {{- end }}
           {{- end }}
   {{- if $component.persistent }}
@@ -193,5 +191,17 @@ spec:
         resources:
           requests:
             storage: {{ $root.Values.persistence.size }}
+    {{- if eq $component.name "local-sandbox" }}
+    - metadata:
+        name: workspace
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if $root.Values.persistence.storageClass }}
+        storageClassName: {{ $root.Values.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $root.Values.persistence.size }}
+    {{- end }}
   {{- end }}
 {{- end }}

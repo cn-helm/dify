@@ -1,0 +1,66 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $root := . }}
+{{- $sandboxes := list "sandbox" }}
+{{- if .Values.agent.enabled }}
+{{- $sandboxes = append $sandboxes "local-sandbox" }}
+{{- end }}
+{{- range $sandbox := $sandboxes }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "dify.name" $root }}-{{ $sandbox }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "dify.labels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $sandbox }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "dify.labels" $root | nindent 14 }}
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values: {{ ternary (list "agent") (list "core" "api" "worker") (eq $sandbox "local-sandbox") | toJson }}
+      ports:
+        - protocol: TCP
+          port: {{ ternary 5004 8194 (eq $sandbox "local-sandbox") }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $root.Values.networkPolicy.dnsNamespace }}
+          podSelector:
+            matchLabels: {{ toYaml $root.Values.networkPolicy.dnsPodLabels | nindent 14 }}
+        {{- range $cidr := $root.Values.networkPolicy.extraDnsCidrs }}
+        - ipBlock:
+            cidr: {{ $cidr | quote }}
+        {{- end }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "dify.labels" $root | nindent 14 }}
+              app.kubernetes.io/component: {{ ternary "agent-proxy" "ssrf-proxy" (eq $sandbox "local-sandbox") }}
+      ports:
+        - protocol: TCP
+          port: 3128
+    {{- if eq $sandbox "local-sandbox" }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "dify.labels" $root | nindent 14 }}
+              app.kubernetes.io/component: agent
+      ports:
+        - protocol: TCP
+          port: 5050
+    {{- end }}
+{{- end }}
+{{- end }}

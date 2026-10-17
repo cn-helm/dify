@@ -11,7 +11,7 @@ images:
   redis: redis:6-alpine
   weaviate: cr.weaviate.io/semitechnologies/weaviate:1.39.2
   nginx: nginx:1.28-alpine
-  squid: ubuntu/squid:6.13-24.10_edge
+  squid: ubuntu/squid:6.6-24.04_edge
   wait: curlimages/curl:8.12.1
 exposure:
   type: ClusterIP
@@ -19,6 +19,7 @@ exposure:
   publicUrl: http://localhost:8080
   ingressClassName: ""
   annotations: {}
+  trustedProxyCidrs: []
   tls:
     enabled: false
     secretName: ""
@@ -57,6 +58,9 @@ networkPolicy:
   dnsPodLabels:
     k8s-app: kube-dns
   extraDnsCidrs: []
+proxy:
+  allowedPrivateCidrs: []
+  allowedPrivateDomains: []
 resources: {}
 nodeSelector: {}
 tolerations: []
