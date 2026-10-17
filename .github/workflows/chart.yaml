@@ -24,13 +24,96 @@ jobs:
           curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar -xz -C /tmp kubeconform
           mkdir -p /tmp/dify-schema-cache
       - run: helm lint .
-      - run: ruby tests/validate.rb
+      - name: Validate Pages publication
+        run: ruby tests/pages.rb
+      - name: Validate Helm templates
         env:
           KUBECONFORM: /tmp/kubeconform
           KUBERNETES_VERSION: ${{ matrix.kubernetes }}
+        run: ruby tests/validate.rb
       - name: Package
         run: helm package . --destination dist
       - uses: actions/upload-artifact@v4
         with:
           name: dify-chart-k8s-${{ matrix.kubernetes }}
           path: dist/*.tgz
+  publish:
+    needs: validate
+    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: helm-pages-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.17.3
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - name: Configure GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v5
+      - name: Prepare README site
+        env:
+          PAGES_ORIGIN: ${{ steps.pages.outputs.origin }}
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: ruby scripts/prepare-pages.rb site
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: site
+          destination: dist
+      - name: Restore previous Chart packages
+        run: |
+          set -euo pipefail
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            history_directory="${RUNNER_TEMP}/previous-helm-repository"
+            mkdir -p "$history_directory"
+            git archive origin/gh-pages | tar -x -C "$history_directory"
+            find "$history_directory" -maxdepth 1 -type f -name '*.tgz' -exec cp {} dist/ \;
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: dify-chart-k8s-1.31.0
+          path: dist
+      - name: Build Helm repository index
+        env:
+          CUSTOM_REPOSITORY_URL: ${{ vars.HELM_REPOSITORY_URL }}
+          PAGES_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          set -euo pipefail
+          repository_url="${CUSTOM_REPOSITORY_URL%/}"
+          if [[ -z "$repository_url" ]]; then
+            repository_url="${PAGES_URL%/}"
+          fi
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            git show origin/gh-pages:index.yaml > "${RUNNER_TEMP}/previous-index.yaml"
+            helm repo index dist --url "$repository_url" --merge "${RUNNER_TEMP}/previous-index.yaml"
+          else
+            helm repo index dist --url "$repository_url"
+          fi
+          cp README.md COMPATIBILITY.md dist/
+          touch dist/.nojekyll
+      - name: Archive Helm repository history
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: dist
+      - name: Upload Pages site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -155,7 +155,41 @@ selectors. Advanced settings remain editable through Values YAML. No Rancher CRD
 are required. The form uses official documented question types, but its target
 Rancher version remains uncertified until an actual UI installation is tested.
 
-Publish a standard Helm repository (run from this repository root):
+The pipeline publishes the chart and this README to GitHub Pages after all
+validation jobs pass on the default branch. Pull requests and other branches
+only validate. Manual runs must select the default branch to publish.
+
+One-time repository setup:
+
+1. Open **Settings > Pages > Build and deployment** and set **Source** to
+  **GitHub Actions**. The workflow cannot enable Pages using `GITHUB_TOKEN` alone.
+2. Allow Actions to write repository contents and deploy to the `github-pages`
+  environment; check organization policies and environment protection rules.
+3. Push to the default branch or manually run the **Helm Chart** workflow.
+
+The website uses the rendered README as its home page and also serves the raw
+`README.md`, compatibility notes, examples, Chart archives, and `index.yaml`.
+The canonical Pages URL is detected automatically, including the project path or
+custom domain. Optional repository variable `HELM_REPOSITORY_URL` overrides the
+Chart download base URL; it must point to the location serving those archives.
+
+For this repository, the default URL is `https://cn-helm.github.io/dify`:
+
+```sh
+helm repo add dify https://cn-helm.github.io/dify
+helm repo update
+helm install dify dify/dify -n dify --create-namespace
+```
+
+Add that same URL to Rancher Cluster Repositories. Previous Chart archives and
+index entries are retained through an automatically maintained `gh-pages` branch,
+while official Pages deployment actions publish the complete site explicitly.
+Keep that archive branch; do not select it as the Pages source or edit it manually.
+Bump the Chart version for each release so Helm clients do not cache an older
+archive under the same version. Publishing uses the workflow's scoped token,
+not a personal access token; protected archive branches may need a policy exception.
+
+To build a standard Helm repository manually (from this repository root):
 
 ```sh
 mkdir -p dist
